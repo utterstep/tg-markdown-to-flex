@@ -1,0 +1,20 @@
+[package]
+name = "tg-markdown-to-flex"
+version = "0.1.0"
+description = "Convert Telegram MarkdownV2 text to LINE Flex Messages"
+authors = ["Vlad Stepanov <utterstep@hey.com>"]
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
+
+[features]
+python = ["dep:pyo3"]
+
+[dev-dependencies]
+pretty_assertions = "1.3"

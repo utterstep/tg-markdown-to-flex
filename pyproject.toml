@@ -1,0 +1,24 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "tg-markdown-to-flex"
+version = "0.1.0"
+description = "Convert Telegram MarkdownV2 text to LINE Flex Messages"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [
+    { name = "Vlad Stepanov", email = "utterstep@hey.com" },
+]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+]
+
+[tool.maturin]
+features = ["python"]
+module-name = "tg_markdown_to_flex._core"
+python-source = "python"
