@@ -4,8 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "tg-markdown-to-flex"
-version = "0.1.0"
+version = "0.1.2"
 description = "Convert Telegram MarkdownV2 text to LINE Flex Messages"
+readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
 authors = [
