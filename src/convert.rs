@@ -30,7 +30,7 @@ enum Block {
     /// Inline content to be rendered as a text component with spans.
     Text(Vec<Span>),
     /// Code block to be rendered as its own text component.
-    CodeBlock(String),
+    Code(String),
     /// A standalone link rendered as a body button (smart dedup).
     LinkButton(CollectedLink),
 }
@@ -52,7 +52,7 @@ pub fn convert(text: &str, options: &ConvertOptions) -> FlexMessage {
                     });
                 }
             }
-            Block::CodeBlock(code) => {
+            Block::Code(code) => {
                 body_contents.push(Component::Text {
                     wrap: true,
                     contents: vec![Span {
@@ -166,7 +166,7 @@ fn parse_blocks(text: &str, options: &ConvertOptions) -> (Vec<Block>, Vec<Collec
                 } else {
                     content
                 };
-                blocks.push(Block::CodeBlock(code.to_owned()));
+                blocks.push(Block::Code(code.to_owned()));
             }
             Fragment::Link {
                 text: link_text,
@@ -184,8 +184,8 @@ fn parse_blocks(text: &str, options: &ConvertOptions) -> (Vec<Block>, Vec<Collec
                 }));
                 // Skip trailing whitespace + newline
                 let rest = input.trim_start_matches(|c: char| c.is_whitespace() && c != '\n');
-                if rest.starts_with('\n') {
-                    input = &rest[1..];
+                if let Some(after_newline) = rest.strip_prefix('\n') {
+                    input = after_newline;
                 }
             }
             _ => {
