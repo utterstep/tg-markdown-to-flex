@@ -296,45 +296,37 @@ mod tests {
     }
 
     #[test]
-    fn test_trailing_link_becomes_body_button() {
+    fn test_trailing_link_deduped_to_footer() {
         let json = to_json("before\n[click here](https://example.com)");
         let body = get_body_contents(&json);
         assert_eq!(body[0]["type"], "text");
         assert_eq!(body[0]["contents"][0]["text"], "before\n");
-        assert_eq!(body[1]["type"], "separator");
-        // Button wrapped in a box with background
-        assert_eq!(body[2]["type"], "box");
-        assert_eq!(body[2]["backgroundColor"], "#F0F0F0");
-        assert_eq!(body[2]["contents"][0]["type"], "button");
-        assert_eq!(body[2]["contents"][0]["action"]["label"], "click here");
-        assert_eq!(
-            body[2]["contents"][0]["action"]["uri"],
-            "https://example.com"
-        );
-        assert_eq!(body[2]["contents"][0]["style"], "link");
-        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+        assert_eq!(body.as_array().unwrap().len(), 1);
+        // Deduped link in footer with background
+        let footer = &json["contents"]["footer"];
+        assert_eq!(footer["backgroundColor"], "#F0F0F0");
+        let fc = get_footer_contents(&json);
+        assert_eq!(fc[0]["type"], "button");
+        assert_eq!(fc[0]["action"]["label"], "click here");
+        assert_eq!(fc[0]["action"]["uri"], "https://example.com");
     }
 
     #[test]
     fn test_trailing_link_at_start_of_input() {
         let json = to_json("[click](https://example.com)\nafter");
         let body = get_body_contents(&json);
-        assert_eq!(body[0]["type"], "separator");
-        assert_eq!(body[1]["type"], "box");
-        assert_eq!(body[1]["contents"][0]["type"], "button");
-        assert_eq!(body[2]["type"], "text");
-        assert_eq!(body[2]["contents"][0]["text"], "after");
-        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+        assert_eq!(body[0]["type"], "text");
+        assert_eq!(body[0]["contents"][0]["text"], "after");
+        let fc = get_footer_contents(&json);
+        assert_eq!(fc[0]["action"]["label"], "click");
     }
 
     #[test]
     fn test_trailing_link_only() {
         let json = to_json("[click](https://example.com)");
-        let body = get_body_contents(&json);
-        assert_eq!(body[0]["type"], "separator");
-        assert_eq!(body[1]["type"], "box");
-        assert_eq!(body[1]["contents"][0]["type"], "button");
-        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+        let fc = get_footer_contents(&json);
+        assert_eq!(fc[0]["type"], "button");
+        assert_eq!(fc[0]["action"]["label"], "click");
     }
 
     #[test]
@@ -343,10 +335,8 @@ mod tests {
         let body = get_body_contents(&json);
         assert_eq!(body[0]["type"], "text");
         assert_eq!(body[0]["contents"][0]["text"], "Check ");
-        assert_eq!(body[1]["type"], "separator");
-        assert_eq!(body[2]["type"], "box");
-        assert_eq!(body[2]["contents"][0]["action"]["label"], "this");
-        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+        let fc = get_footer_contents(&json);
+        assert_eq!(fc[0]["action"]["label"], "this");
     }
 
     #[test]
@@ -377,12 +367,12 @@ mod tests {
         let json = to_json("See [inline](https://a.com) here\n[trailing](https://b.com)");
         let body = get_body_contents(&json);
         assert_eq!(body[0]["type"], "text");
-        assert_eq!(body[1]["type"], "separator");
-        assert_eq!(body[2]["type"], "box");
-        assert_eq!(body[2]["contents"][0]["action"]["uri"], "https://b.com");
-        let footer = get_footer_contents(&json);
-        assert_eq!(footer[0]["action"]["uri"], "https://a.com");
-        assert_eq!(footer.as_array().unwrap().len(), 1);
+        assert_eq!(body.as_array().unwrap().len(), 1);
+        // Both links end up in footer (inline first, then trailing)
+        let fc = get_footer_contents(&json);
+        assert_eq!(fc[0]["action"]["uri"], "https://a.com");
+        assert_eq!(fc[1]["action"]["uri"], "https://b.com");
+        assert_eq!(fc.as_array().unwrap().len(), 2);
     }
 
     // --- Link decoration ---

@@ -76,7 +76,7 @@ The package ships with PEP 561 type stubs.
 
 ```toml
 [dependencies]
-tg-markdown-to-flex = "0.2.0"
+tg-markdown-to-flex = "0.3.0"
 ```
 
 ### Usage

@@ -31,8 +31,6 @@ enum Block {
     Text(Vec<Span>),
     /// Code block to be rendered as its own text component.
     Code(String),
-    /// A standalone link rendered as a body button (smart dedup).
-    LinkButton(CollectedLink),
 }
 
 /// Convert Telegram MarkdownV2 text into a Flex Message.
@@ -66,24 +64,6 @@ pub fn convert(text: &str, options: &ConvertOptions) -> FlexMessage {
                     }],
                 });
             }
-            Block::LinkButton(link) => {
-                body_contents.push(Component::Separator {});
-                body_contents.push(Component::Box(FlexBox {
-                    type_: FlexBoxType::Box,
-                    layout: BoxLayout::Vertical,
-                    contents: vec![Component::Button {
-                        action: UriAction {
-                            type_: UriActionType::Uri,
-                            label: link.label,
-                            uri: link.url,
-                        },
-                        style: ButtonStyle::Link,
-                        height: ButtonHeight::Sm,
-                    }],
-                    spacing: None,
-                    background_color: Some("#F0F0F0".to_owned()),
-                }));
-            }
         }
     }
 
@@ -116,7 +96,7 @@ pub fn convert(text: &str, options: &ConvertOptions) -> FlexMessage {
             layout: BoxLayout::Vertical,
             contents: buttons,
             spacing: Some("sm".to_owned()),
-            background_color: None,
+            background_color: Some("#F0F0F0".to_owned()),
         })
     };
 
@@ -172,16 +152,12 @@ fn parse_blocks(text: &str, options: &ConvertOptions) -> (Vec<Block>, Vec<Collec
                 text: link_text,
                 url,
             } if options.standalone_links_as_buttons && is_at_line_end(input) => {
-                // Flush current inline spans
-                if !current_spans.is_empty() {
-                    blocks.push(Block::Text(std::mem::take(&mut current_spans)));
-                }
-                // Emit as inline body button
+                // Dedup: add to footer links without inline rendering
                 let label = strip_markdown(link_text);
-                blocks.push(Block::LinkButton(CollectedLink {
+                links.push(CollectedLink {
                     label,
                     url: url.to_owned(),
-                }));
+                });
                 // Skip trailing whitespace + newline
                 let rest = input.trim_start_matches(|c: char| c.is_whitespace() && c != '\n');
                 if let Some(after_newline) = rest.strip_prefix('\n') {

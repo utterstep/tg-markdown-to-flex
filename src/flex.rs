@@ -68,8 +68,6 @@ pub enum Component {
     },
     #[serde(rename = "separator")]
     Separator {},
-    #[serde(untagged)]
-    Box(FlexBox),
 }
 
 #[derive(Debug, Clone, Serialize)]
