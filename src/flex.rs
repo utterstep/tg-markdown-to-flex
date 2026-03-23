@@ -20,7 +20,8 @@ pub enum FlexMessageType {
 pub struct Bubble {
     #[serde(rename = "type")]
     pub type_: BubbleType,
-    pub body: FlexBox,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<FlexBox>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub footer: Option<FlexBox>,
 }

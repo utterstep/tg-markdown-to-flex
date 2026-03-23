@@ -324,6 +324,8 @@ mod tests {
     #[test]
     fn test_trailing_link_only() {
         let json = to_json("[click](https://example.com)");
+        // Body should be absent (not an empty text span)
+        assert_eq!(json["contents"]["body"], serde_json::Value::Null);
         let fc = get_footer_contents(&json);
         assert_eq!(fc[0]["type"], "button");
         assert_eq!(fc[0]["action"]["label"], "click");

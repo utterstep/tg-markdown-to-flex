@@ -67,13 +67,17 @@ pub fn convert(text: &str, options: &ConvertOptions) -> FlexMessage {
         }
     }
 
-    // If body is empty, add an empty text component
-    if body_contents.is_empty() {
-        body_contents.push(Component::Text {
-            wrap: true,
-            contents: vec![Span::plain(String::new())],
-        });
-    }
+    let body = if body_contents.is_empty() {
+        None
+    } else {
+        Some(FlexBox {
+            type_: FlexBoxType::Box,
+            layout: BoxLayout::Vertical,
+            contents: body_contents,
+            spacing: Some("md".to_owned()),
+            background_color: None,
+        })
+    };
 
     let footer = if links.is_empty() {
         None
@@ -105,13 +109,7 @@ pub fn convert(text: &str, options: &ConvertOptions) -> FlexMessage {
         alt_text,
         contents: Bubble {
             type_: BubbleType::Bubble,
-            body: FlexBox {
-                type_: FlexBoxType::Box,
-                layout: BoxLayout::Vertical,
-                contents: body_contents,
-                spacing: Some("md".to_owned()),
-                background_color: None,
-            },
+            body,
             footer,
         },
     }
