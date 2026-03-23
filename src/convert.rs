@@ -168,9 +168,10 @@ fn parse_blocks(text: &str, options: &ConvertOptions) -> (Vec<Block>, Vec<Collec
                 };
                 blocks.push(Block::CodeBlock(code.to_owned()));
             }
-            Fragment::Link { text: link_text, url }
-                if options.standalone_links_as_buttons && is_at_line_end(input) =>
-            {
+            Fragment::Link {
+                text: link_text,
+                url,
+            } if options.standalone_links_as_buttons && is_at_line_end(input) => {
                 // Flush current inline spans
                 if !current_spans.is_empty() {
                     blocks.push(Block::Text(std::mem::take(&mut current_spans)));

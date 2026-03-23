@@ -307,7 +307,10 @@ mod tests {
         assert_eq!(body[2]["backgroundColor"], "#F0F0F0");
         assert_eq!(body[2]["contents"][0]["type"], "button");
         assert_eq!(body[2]["contents"][0]["action"]["label"], "click here");
-        assert_eq!(body[2]["contents"][0]["action"]["uri"], "https://example.com");
+        assert_eq!(
+            body[2]["contents"][0]["action"]["uri"],
+            "https://example.com"
+        );
         assert_eq!(body[2]["contents"][0]["style"], "link");
         assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
     }
