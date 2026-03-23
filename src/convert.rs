@@ -1,4 +1,5 @@
 use crate::{
+    ConvertOptions,
     flex::{
         BoxLayout, Bubble, BubbleType, ButtonHeight, ButtonStyle, Component, FlexBox, FlexBoxType,
         FlexMessage, FlexMessageType, FontStyle, FontWeight, Span, SpanType, TextDecoration,
@@ -30,11 +31,13 @@ enum Block {
     Text(Vec<Span>),
     /// Code block to be rendered as its own text component.
     CodeBlock(String),
+    /// A standalone link rendered as a body button (smart dedup).
+    LinkButton(CollectedLink),
 }
 
 /// Convert Telegram MarkdownV2 text into a Flex Message.
-pub fn convert(text: &str) -> FlexMessage {
-    let (blocks, links) = parse_blocks(text);
+pub fn convert(text: &str, options: &ConvertOptions) -> FlexMessage {
+    let (blocks, links) = parse_blocks(text, options);
     let alt_text = strip_markdown(text);
 
     let mut body_contents: Vec<Component> = Vec::new();
@@ -62,6 +65,24 @@ pub fn convert(text: &str) -> FlexMessage {
                         size: Some("sm".to_owned()),
                     }],
                 });
+            }
+            Block::LinkButton(link) => {
+                body_contents.push(Component::Separator {});
+                body_contents.push(Component::Box(FlexBox {
+                    type_: FlexBoxType::Box,
+                    layout: BoxLayout::Vertical,
+                    contents: vec![Component::Button {
+                        action: UriAction {
+                            type_: UriActionType::Uri,
+                            label: link.label,
+                            uri: link.url,
+                        },
+                        style: ButtonStyle::Link,
+                        height: ButtonHeight::Sm,
+                    }],
+                    spacing: None,
+                    background_color: Some("#F0F0F0".to_owned()),
+                }));
             }
         }
     }
@@ -95,6 +116,7 @@ pub fn convert(text: &str) -> FlexMessage {
             layout: BoxLayout::Vertical,
             contents: buttons,
             spacing: Some("sm".to_owned()),
+            background_color: None,
         })
     };
 
@@ -108,14 +130,21 @@ pub fn convert(text: &str) -> FlexMessage {
                 layout: BoxLayout::Vertical,
                 contents: body_contents,
                 spacing: Some("md".to_owned()),
+                background_color: None,
             },
             footer,
         },
     }
 }
 
+/// Check if the remaining input starts a new line (or is empty).
+fn is_at_line_end(input: &str) -> bool {
+    let rest = input.trim_start_matches(|c: char| c.is_whitespace() && c != '\n');
+    rest.is_empty() || rest.starts_with('\n')
+}
+
 /// Parse input into blocks (text runs and code blocks) + collected links.
-fn parse_blocks(text: &str) -> (Vec<Block>, Vec<CollectedLink>) {
+fn parse_blocks(text: &str, options: &ConvertOptions) -> (Vec<Block>, Vec<CollectedLink>) {
     let mut blocks: Vec<Block> = Vec::new();
     let mut current_spans: Vec<Span> = Vec::new();
     let mut links: Vec<CollectedLink> = Vec::new();
@@ -139,12 +168,32 @@ fn parse_blocks(text: &str) -> (Vec<Block>, Vec<CollectedLink>) {
                 };
                 blocks.push(Block::CodeBlock(code.to_owned()));
             }
+            Fragment::Link { text: link_text, url }
+                if options.standalone_links_as_buttons && is_at_line_end(input) =>
+            {
+                // Flush current inline spans
+                if !current_spans.is_empty() {
+                    blocks.push(Block::Text(std::mem::take(&mut current_spans)));
+                }
+                // Emit as inline body button
+                let label = strip_markdown(link_text);
+                blocks.push(Block::LinkButton(CollectedLink {
+                    label,
+                    url: url.to_owned(),
+                }));
+                // Skip trailing whitespace + newline
+                let rest = input.trim_start_matches(|c: char| c.is_whitespace() && c != '\n');
+                if rest.starts_with('\n') {
+                    input = &rest[1..];
+                }
+            }
             _ => {
                 collect_fragment_spans(
                     fragment,
                     &SpanStyle::default(),
                     &mut current_spans,
                     &mut links,
+                    options,
                 );
             }
         }
@@ -164,6 +213,7 @@ fn collect_fragment_spans(
     parent_style: &SpanStyle,
     spans: &mut Vec<Span>,
     links: &mut Vec<CollectedLink>,
+    options: &ConvertOptions,
 ) {
     match fragment {
         Fragment::Plain(c) => {
@@ -184,13 +234,16 @@ fn collect_fragment_spans(
             });
         }
         Fragment::Link { text, url } => {
-            // Render link text inline with blue underline styling
-            let link_style = SpanStyle {
-                color: Some("#1689FC"),
-                decoration: Some(TextDecoration::Underline),
-                ..parent_style.clone()
+            let link_style = if options.decorate_links {
+                SpanStyle {
+                    color: Some("#1689FC"),
+                    decoration: Some(TextDecoration::Underline),
+                    ..parent_style.clone()
+                }
+            } else {
+                parent_style.clone()
             };
-            collect_inline_spans(text, &link_style, spans, links);
+            collect_inline_spans(text, &link_style, spans, links, options);
 
             // Collect for footer button
             let label = strip_markdown(text);
@@ -201,7 +254,7 @@ fn collect_fragment_spans(
         }
         Fragment::Formatted { delim, content } => {
             let child_style = apply_delim(parent_style, delim);
-            collect_inline_spans(content, &child_style, spans, links);
+            collect_inline_spans(content, &child_style, spans, links, options);
         }
         Fragment::CodeBlock(_) => {
             // Should not happen at this level — handled in parse_blocks
@@ -215,11 +268,12 @@ fn collect_inline_spans(
     style: &SpanStyle,
     spans: &mut Vec<Span>,
     links: &mut Vec<CollectedLink>,
+    options: &ConvertOptions,
 ) {
     let mut input = text;
     while !input.is_empty() {
         let fragment = next_fragment(&mut input);
-        collect_fragment_spans(fragment, style, spans, links);
+        collect_fragment_spans(fragment, style, spans, links, options);
     }
 }
 

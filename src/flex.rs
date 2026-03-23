@@ -39,6 +39,8 @@ pub struct FlexBox {
     pub contents: Vec<Component>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spacing: Option<String>,
+    #[serde(rename = "backgroundColor", skip_serializing_if = "Option::is_none")]
+    pub background_color: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -66,6 +68,8 @@ pub enum Component {
     },
     #[serde(rename = "separator")]
     Separator {},
+    #[serde(untagged)]
+    Box(FlexBox),
 }
 
 #[derive(Debug, Clone, Serialize)]

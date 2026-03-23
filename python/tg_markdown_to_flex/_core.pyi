@@ -1,4 +1,9 @@
-def tg_markdown_to_flex(text: str) -> str:
+def tg_markdown_to_flex(
+    text: str,
+    *,
+    standalone_links_as_buttons: bool = True,
+    decorate_links: bool = True,
+) -> str:
     """Convert Telegram MarkdownV2 text to a LINE Flex Message JSON string.
 
     Parses the following Telegram MarkdownV2 constructs and maps them to
@@ -11,6 +16,13 @@ def tg_markdown_to_flex(text: str) -> str:
     - ``||spoiler||`` → span with near-white color
     - `` `inline code` `` → span with red color, small size
     - ```` ```code block```` ```` → separate text component with red color
-    - ``[text](url)`` → blue underlined span + footer URI button
+    - ``[text](url)`` → link button (deduped or inline + footer)
+
+    Args:
+        text: Telegram MarkdownV2 formatted text.
+        standalone_links_as_buttons: When True (default), links at the end of
+            a line become body buttons instead of duplicated inline + footer.
+        decorate_links: When True (default), inline links are styled with
+            blue color and underline. Set to False for plain text.
     """
     ...

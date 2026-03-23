@@ -19,7 +19,13 @@ Takes a string with Telegram MarkdownV2 formatting and produces a LINE Flex Mess
 | `` `inline code` `` | span with red color, small size |
 | ` ```code block``` ` | separate text component, red/small |
 | `\|\|spoiler\|\|` | span with near-white color |
-| `[text](url)` | blue underlined span + footer URI button |
+| `[text](url)` | link button (see below) |
+
+### Smart link dedup
+
+By default, links at the end of a line are rendered as a button in the message body (with a separator and grey background), avoiding duplication. Links in the middle of text still get an inline blue/underlined span plus a footer button.
+
+This behavior is configurable — see the options below.
 
 ## Python
 
@@ -49,6 +55,17 @@ message = json.loads(flex_json)
 
 The function returns a JSON string representing a complete Flex Message (type `"flex"` with `altText` and `contents`).
 
+#### Options
+
+```python
+tg_markdown_to_flex(
+    text,
+    *,
+    standalone_links_as_buttons=True,  # dedup trailing links as body buttons
+    decorate_links=True,               # blue/underline styling on inline links
+)
+```
+
 ### Type checking
 
 The package ships with PEP 561 type stubs.
@@ -59,7 +76,7 @@ The package ships with PEP 561 type stubs.
 
 ```toml
 [dependencies]
-tg-markdown-to-flex = "0.1.0"
+tg-markdown-to-flex = "0.2.0"
 ```
 
 ### Usage
@@ -74,10 +91,22 @@ let message = tg_markdown_to_flex("Hello *world*");
 let json = tg_markdown_to_flex_json("Hello *world*");
 ```
 
+With options:
+
+```rust
+use tg_markdown_to_flex::{tg_markdown_to_flex_with_options, ConvertOptions};
+
+let options = ConvertOptions {
+    standalone_links_as_buttons: false,
+    decorate_links: false,
+};
+let message = tg_markdown_to_flex_with_options("Hello *world*", &options);
+```
+
 ## Testing
 
 ```bash
-cargo test
+cargo nextest run
 ```
 
 ## License

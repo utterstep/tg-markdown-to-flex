@@ -4,9 +4,37 @@ mod parser;
 
 pub use flex::FlexMessage;
 
+/// Options controlling the conversion behavior.
+#[derive(Debug, Clone)]
+pub struct ConvertOptions {
+    /// When `true` (the default), links at the end of a line are rendered as
+    /// buttons directly in the message body instead of being duplicated as
+    /// both inline styled text and a footer button.
+    pub standalone_links_as_buttons: bool,
+    /// When `true` (the default), non-deduped inline links are styled with
+    /// blue color and underline decoration. Set to `false` to render link
+    /// text with no special styling (the footer button still provides
+    /// clickability).
+    pub decorate_links: bool,
+}
+
+impl Default for ConvertOptions {
+    fn default() -> Self {
+        Self {
+            standalone_links_as_buttons: true,
+            decorate_links: true,
+        }
+    }
+}
+
 /// Convert Telegram MarkdownV2 text to a LINE Flex Message struct.
 pub fn tg_markdown_to_flex(text: &str) -> FlexMessage {
-    convert::convert(text)
+    tg_markdown_to_flex_with_options(text, &ConvertOptions::default())
+}
+
+/// Convert Telegram MarkdownV2 text to a LINE Flex Message struct with options.
+pub fn tg_markdown_to_flex_with_options(text: &str, options: &ConvertOptions) -> FlexMessage {
+    convert::convert(text, options)
 }
 
 /// Convert Telegram MarkdownV2 text to a LINE Flex Message JSON string.
@@ -14,14 +42,31 @@ pub fn tg_markdown_to_flex_json(text: &str) -> String {
     serde_json::to_string(&tg_markdown_to_flex(text)).expect("FlexMessage serialization failed")
 }
 
+/// Convert Telegram MarkdownV2 text to a LINE Flex Message JSON string with options.
+pub fn tg_markdown_to_flex_json_with_options(text: &str, options: &ConvertOptions) -> String {
+    serde_json::to_string(&tg_markdown_to_flex_with_options(text, options))
+        .expect("FlexMessage serialization failed")
+}
+
 #[cfg(feature = "python")]
 mod python {
     use pyo3::prelude::*;
 
+    use super::ConvertOptions;
+
     /// Convert Telegram MarkdownV2 text to a LINE Flex Message JSON string.
     #[pyfunction]
-    fn tg_markdown_to_flex(text: &str) -> String {
-        super::tg_markdown_to_flex_json(text)
+    #[pyo3(signature = (text, *, standalone_links_as_buttons=true, decorate_links=true))]
+    fn tg_markdown_to_flex(
+        text: &str,
+        standalone_links_as_buttons: bool,
+        decorate_links: bool,
+    ) -> String {
+        let options = ConvertOptions {
+            standalone_links_as_buttons,
+            decorate_links,
+        };
+        super::tg_markdown_to_flex_json_with_options(text, &options)
     }
 
     #[pymodule]
@@ -242,6 +287,130 @@ mod tests {
     fn test_no_footer_without_links() {
         let json = to_json("no links here");
         assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+    }
+
+    // --- Standalone link dedup ---
+
+    fn to_json_with_options(text: &str, options: &ConvertOptions) -> serde_json::Value {
+        serde_json::from_str(&tg_markdown_to_flex_json_with_options(text, options)).unwrap()
+    }
+
+    #[test]
+    fn test_trailing_link_becomes_body_button() {
+        let json = to_json("before\n[click here](https://example.com)");
+        let body = get_body_contents(&json);
+        assert_eq!(body[0]["type"], "text");
+        assert_eq!(body[0]["contents"][0]["text"], "before\n");
+        assert_eq!(body[1]["type"], "separator");
+        // Button wrapped in a box with background
+        assert_eq!(body[2]["type"], "box");
+        assert_eq!(body[2]["backgroundColor"], "#F0F0F0");
+        assert_eq!(body[2]["contents"][0]["type"], "button");
+        assert_eq!(body[2]["contents"][0]["action"]["label"], "click here");
+        assert_eq!(body[2]["contents"][0]["action"]["uri"], "https://example.com");
+        assert_eq!(body[2]["contents"][0]["style"], "link");
+        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_trailing_link_at_start_of_input() {
+        let json = to_json("[click](https://example.com)\nafter");
+        let body = get_body_contents(&json);
+        assert_eq!(body[0]["type"], "separator");
+        assert_eq!(body[1]["type"], "box");
+        assert_eq!(body[1]["contents"][0]["type"], "button");
+        assert_eq!(body[2]["type"], "text");
+        assert_eq!(body[2]["contents"][0]["text"], "after");
+        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_trailing_link_only() {
+        let json = to_json("[click](https://example.com)");
+        let body = get_body_contents(&json);
+        assert_eq!(body[0]["type"], "separator");
+        assert_eq!(body[1]["type"], "box");
+        assert_eq!(body[1]["contents"][0]["type"], "button");
+        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_trailing_link_after_text_on_same_line() {
+        let json = to_json("Check [this](https://example.com)");
+        let body = get_body_contents(&json);
+        assert_eq!(body[0]["type"], "text");
+        assert_eq!(body[0]["contents"][0]["text"], "Check ");
+        assert_eq!(body[1]["type"], "separator");
+        assert_eq!(body[2]["type"], "box");
+        assert_eq!(body[2]["contents"][0]["action"]["label"], "this");
+        assert_eq!(json["contents"]["footer"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn test_mid_line_link_still_gets_footer() {
+        // Link NOT at end of line — should still use footer
+        let json = to_json("Check [this](https://example.com) out");
+        let footer = get_footer_contents(&json);
+        assert_eq!(footer[0]["type"], "button");
+        assert_eq!(footer[0]["action"]["label"], "this");
+    }
+
+    #[test]
+    fn test_dedup_disabled() {
+        let options = ConvertOptions {
+            standalone_links_as_buttons: false,
+            ..ConvertOptions::default()
+        };
+        let json = to_json_with_options("before\n[click](https://example.com)", &options);
+        let spans = get_spans(&json, 0);
+        assert_eq!(spans[1]["text"], "click");
+        assert_eq!(spans[1]["color"], "#1689FC");
+        let footer = get_footer_contents(&json);
+        assert_eq!(footer[0]["type"], "button");
+    }
+
+    #[test]
+    fn test_mixed_trailing_and_mid_line_links() {
+        let json = to_json("See [inline](https://a.com) here\n[trailing](https://b.com)");
+        let body = get_body_contents(&json);
+        assert_eq!(body[0]["type"], "text");
+        assert_eq!(body[1]["type"], "separator");
+        assert_eq!(body[2]["type"], "box");
+        assert_eq!(body[2]["contents"][0]["action"]["uri"], "https://b.com");
+        let footer = get_footer_contents(&json);
+        assert_eq!(footer[0]["action"]["uri"], "https://a.com");
+        assert_eq!(footer.as_array().unwrap().len(), 1);
+    }
+
+    // --- Link decoration ---
+
+    #[test]
+    fn test_link_decoration_disabled() {
+        let options = ConvertOptions {
+            standalone_links_as_buttons: false,
+            decorate_links: false,
+        };
+        let json = to_json_with_options("Check [this](https://example.com) out", &options);
+        let spans = get_spans(&json, 0);
+        // Link text merges with surrounding text (no distinct styling)
+        assert_eq!(spans[0]["text"], "Check this out");
+        assert_eq!(spans[0]["color"], serde_json::Value::Null);
+        assert_eq!(spans[0]["decoration"], serde_json::Value::Null);
+        // Footer button still present
+        let footer = get_footer_contents(&json);
+        assert_eq!(footer[0]["type"], "button");
+    }
+
+    #[test]
+    fn test_link_decoration_enabled_by_default() {
+        let options = ConvertOptions {
+            standalone_links_as_buttons: false,
+            ..ConvertOptions::default()
+        };
+        let json = to_json_with_options("Check [this](https://example.com) out", &options);
+        let spans = get_spans(&json, 0);
+        assert_eq!(spans[1]["color"], "#1689FC");
+        assert_eq!(spans[1]["decoration"], "underline");
     }
 
     #[test]
